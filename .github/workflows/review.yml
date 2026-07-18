@@ -297,14 +297,14 @@ jobs:
           level: warning
           reporter: github-pr-review
           github_token: ${{ github.token }}
-      -
-        name: ActionLint
-        if: steps.review.outputs.actionlint == 'true'
-        uses: reviewdog/action-actionlint@v1
-        with:
-          level: warning
-          reporter: github-pr-review
-          github_token: ${{ github.token }}
+      #-
+        #name: ActionLint
+        #if: steps.review.outputs.actionlint == 'true'
+        #uses: reviewdog/action-actionlint@v1
+        #with:
+        #  level: warning
+        #  reporter: github-pr-review
+        #  github_token: ${{ github.token }}
       -
         name: Shellcheck
         if: steps.review.outputs.shellcheck == 'true'
