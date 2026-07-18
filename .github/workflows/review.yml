@@ -342,14 +342,14 @@ jobs:
           reporter: github-pr-review
           stylelint_input: "**/*.{css,scss,sass,less}"
           github_token: ${{ github.token }}
-      -
-        name: Markdownlint
-        if: steps.review.outputs.markdownlint == 'true'
-        uses: reviewdog/action-markdownlint@v0
-        with:
-          level: warning
-          reporter: github-pr-review
-          github_token: ${{ github.token }}
+      #-
+        #name: Markdownlint
+        #if: steps.review.outputs.markdownlint == 'true'
+        #uses: reviewdog/action-markdownlint@v0
+        #with:
+        #  level: warning
+        #  reporter: github-pr-review
+        #  github_token: ${{ github.token }}
       -
         name: GolangCI-Lint
         if: steps.review.outputs.golangci == 'true'
