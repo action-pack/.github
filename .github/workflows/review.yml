@@ -1,0 +1,361 @@
+on:
+  workflow_call:
+
+name: "Review"
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  review:
+    name: review
+    runs-on: ubuntu-latest
+    steps:
+    -
+      name: Checkout code
+      uses: actions/checkout@v7
+    -
+      name: Configure review
+      id: review
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+      run: |
+        set -Eeuo pipefail
+
+        hadolint=false
+        yamllint=false
+        actionlint=false
+        shellcheck=false
+        eslint=false
+        stylelint=false
+        markdownlint=false
+        golangci=false
+
+        mapfile -t changed_files < <(
+          gh api --paginate \
+            "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files?per_page=100" \
+            --jq '.[] | select(.status != "removed") | .filename'
+        )
+
+        for file in "${changed_files[@]}"; do
+          case "$file" in
+            Dockerfile|*/Dockerfile|Dockerfile.*|*/Dockerfile.*|\
+            .hadolint.yml|.hadolint.yaml|*/.hadolint.yml|*/.hadolint.yaml|\
+            .github/workflows/check.yml|.github/workflows/check.yaml)
+              hadolint=true
+              ;;
+          esac
+
+          case "$file" in
+            *.yml|*.yaml|\
+            .yamllint|.yamllint.yml|.yamllint.yaml)
+              yamllint=true
+              ;;
+          esac
+
+          case "$file" in
+            .github/workflows/*.yml|.github/workflows/*.yaml|\
+            action.yml|action.yaml|*/action.yml|*/action.yaml|\
+            .github/actionlint.yml|.github/actionlint.yaml)
+              actionlint=true
+              ;;
+          esac
+
+          case "$file" in
+            *.sh|*.bash|*.bats|*.ksh|\
+            .shellcheckrc|*/.shellcheckrc|\
+            .github/workflows/check.yml|.github/workflows/check.yaml)
+              shellcheck=true
+              ;;
+          esac
+
+          if [[ -f "$file" ]] && head -n 1 "$file" | grep -q '^#!.*sh'; then
+            shellcheck=true
+          fi
+
+          case "$file" in
+            *.js|*.jsx|*.mjs|*.cjs|\
+            *.ts|*.tsx|*.mts|*.cts|\
+            eslint.config.*|.eslintrc*|\
+            package.json|package-lock.json|npm-shrinkwrap.json|\
+            yarn.lock|pnpm-lock.yaml)
+              eslint=true
+              ;;
+          esac
+
+          case "$file" in
+            *.css|*.scss|*.sass|*.less|\
+            stylelint.config.*|.stylelintrc*|\
+            package.json|package-lock.json|npm-shrinkwrap.json|\
+            yarn.lock|pnpm-lock.yaml)
+              stylelint=true
+              ;;
+          esac
+
+          case "$file" in
+            *.md|*.markdown|\
+            .markdownlint*|markdownlint-cli2.*)
+              markdownlint=true
+              ;;
+          esac
+
+          case "$file" in
+            *.go|go.mod|go.sum|\
+            .golangci.yml|.golangci.yaml|\
+            .golangci-lint.yml|.golangci-lint.yaml)
+              golangci=true
+              ;;
+          esac
+        done
+
+        tracked_files="$(git ls-files)"
+
+        # Do not invoke Hadolint when the repository has no Dockerfile.
+        if [[ "$hadolint" == true ]] &&
+          ! grep -Eq '(^|/).*Dockerfile.*$' <<< "$tracked_files"; then
+          hadolint=false
+        fi
+
+        # Check whether the repository contains an actual shell source file.
+        if [[ "$shellcheck" == true ]]; then
+          shell_sources=false
+
+          while IFS= read -r file; do
+            case "$file" in
+              *.sh|*.bash|*.bats|*.ksh)
+                shell_sources=true
+                break
+                ;;
+            esac
+
+            if [[ -f "$file" ]] && head -n 1 "$file" | grep -q '^#!.*sh'; then
+              shell_sources=true
+              break
+            fi
+          done <<< "$tracked_files"
+
+          [[ "$shell_sources" == true ]] || shellcheck=false
+        fi
+
+        # ESLint and Stylelint require both a project configuration and
+        # the corresponding package to be declared in package.json.
+        read -r eslint_available stylelint_available < <(
+          python3 <<'PY'
+        import json
+        from pathlib import Path
+
+        root = Path(".")
+        package_file = root / "package.json"
+        package = {}
+
+        if package_file.is_file():
+            try:
+                package = json.loads(package_file.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                package = {}
+
+        dependencies = {}
+        for key in (
+            "dependencies",
+            "devDependencies",
+            "optionalDependencies",
+            "peerDependencies",
+        ):
+            dependencies.update(package.get(key) or {})
+
+        eslint_config = (
+            any(root.glob("eslint.config.*"))
+            or any(root.glob(".eslintrc*"))
+            or bool(package.get("eslintConfig"))
+        )
+        stylelint_config = (
+            any(root.glob("stylelint.config.*"))
+            or any(root.glob(".stylelintrc*"))
+            or bool(package.get("stylelint"))
+        )
+
+        eslint_available = eslint_config and "eslint" in dependencies
+        stylelint_available = stylelint_config and "stylelint" in dependencies
+
+        print(
+            str(eslint_available).lower(),
+            str(stylelint_available).lower(),
+        )
+        PY
+        )
+
+        if [[ "$eslint" == true ]]; then
+          if [[ "$eslint_available" != true ]] ||
+            ! grep -Eq '\.(js|jsx|mjs|cjs|ts|tsx|mts|cts)$' <<< "$tracked_files"; then
+            eslint=false
+          fi
+        fi
+
+        if [[ "$stylelint" == true ]]; then
+          if [[ "$stylelint_available" != true ]] ||
+            ! grep -Eq '\.(css|scss|sass|less)$' <<< "$tracked_files"; then
+            stylelint=false
+          fi
+        fi
+
+        if [[ "$markdownlint" == true ]] &&
+          ! grep -Eq '\.(md|markdown)$' <<< "$tracked_files"; then
+          markdownlint=false
+        fi
+
+        if [[ "$golangci" == true ]]; then
+          if [[ ! -f go.mod ]] ||
+            ! grep -Eq '\.go$' <<< "$tracked_files"; then
+            golangci=false
+          fi
+        fi
+
+        node=false
+        if [[ "$eslint" == true || "$stylelint" == true ]]; then
+          node=true
+        fi
+
+        # Import repository-specific exclusions from the existing
+        # check workflow when one is present.
+        check_file=""
+
+        if [[ -f .github/workflows/check.yml ]]; then
+          check_file=".github/workflows/check.yml"
+        elif [[ -f .github/workflows/check.yaml ]]; then
+          check_file=".github/workflows/check.yaml"
+        fi
+
+        shellcheck_exclusions=""
+        hadolint_exclusions=""
+
+        if [[ -n "$check_file" ]]; then
+          mapfile -t exclusions < <(
+            CHECK_FILE="$check_file" python3 <<'PY'
+        import os
+        import re
+        from pathlib import Path
+
+        text = Path(os.environ["CHECK_FILE"]).read_text(encoding="utf-8")
+
+        shellcheck = list(dict.fromkeys(re.findall(r"\bSC\d{4}\b", text)))
+        hadolint = list(dict.fromkeys(re.findall(r"\bDL\d{4}\b", text)))
+
+        print(" ".join(f"-e {code}" for code in shellcheck))
+        print(" ".join(hadolint))
+        PY
+          )
+
+          shellcheck_exclusions="${exclusions[0]:-}"
+          hadolint_exclusions="${exclusions[1]:-}"
+        fi
+
+        {
+          printf 'hadolint=%s\n' "$hadolint"
+          printf 'yamllint=%s\n' "$yamllint"
+          printf 'actionlint=%s\n' "$actionlint"
+          printf 'shellcheck=%s\n' "$shellcheck"
+          printf 'eslint=%s\n' "$eslint"
+          printf 'stylelint=%s\n' "$stylelint"
+          printf 'markdownlint=%s\n' "$markdownlint"
+          printf 'golangci=%s\n' "$golangci"
+          printf 'node=%s\n' "$node"
+          printf 'shellcheck_exclusions=%s\n' "$shellcheck_exclusions"
+          printf 'hadolint_exclusions=%s\n' "$hadolint_exclusions"
+        } >> "$GITHUB_OUTPUT"
+    -
+      # Install dependencies once so ESLint and Stylelint do not run
+      # concurrent npm install commands inside the parallel block.
+      name: Install Node dependencies
+      if: steps.review.outputs.node == 'true'
+      run: |
+        set -Eeuo pipefail
+
+        if [[ -f package-lock.json || -f npm-shrinkwrap.json ]]; then
+          npm ci --no-audit --no-fund
+        else
+          npm install --package-lock=false --no-audit --no-fund
+        fi
+    - parallel:
+      -
+        name: Hadolint
+        if: steps.review.outputs.hadolint == 'true'
+        uses: reviewdog/action-hadolint@v1
+        with:
+          level: warning
+          fail_level: error
+          reporter: github-pr-review
+          hadolint_ignore: ${{ steps.review.outputs.hadolint_exclusions }}
+          github_token: ${{ github.token }}
+      -
+        name: YamlLint
+        if: steps.review.outputs.yamllint == 'true'
+        uses: reviewdog/action-yamllint@v1
+        with:
+          level: warning
+          reporter: github-pr-review
+          github_token: ${{ github.token }}
+      -
+        name: ActionLint
+        if: steps.review.outputs.actionlint == 'true'
+        uses: reviewdog/action-actionlint@v1
+        with:
+          level: warning
+          reporter: github-pr-review
+          github_token: ${{ github.token }}
+      -
+        name: Shellcheck
+        if: steps.review.outputs.shellcheck == 'true'
+        uses: reviewdog/action-shellcheck@v1
+        with:
+          level: warning
+          fail_level: error
+          reporter: github-pr-review
+          pattern: |
+            *.sh
+            *.bash
+            *.bats
+            *.ksh
+          check_all_files_with_shebangs: "true"
+          shellcheck_flags: >-
+            -x
+            ${{ steps.review.outputs.shellcheck_exclusions }}
+          github_token: ${{ github.token }}
+      -
+        name: ESLint
+        if: steps.review.outputs.eslint == 'true'
+        uses: reviewdog/action-eslint@v1
+        with:
+          level: warning
+          fail_level: error
+          reporter: github-pr-review
+          github_token: ${{ github.token }}
+      -
+        name: Stylelint
+        if: steps.review.outputs.stylelint == 'true'
+        uses: reviewdog/action-stylelint@v1
+        with:
+          level: warning
+          fail_level: error
+          reporter: github-pr-review
+          stylelint_input: "**/*.{css,scss,sass,less}"
+          github_token: ${{ github.token }}
+      -
+        name: Markdownlint
+        if: steps.review.outputs.markdownlint == 'true'
+        uses: reviewdog/action-markdownlint@v0
+        with:
+          level: warning
+          reporter: github-pr-review
+          github_token: ${{ github.token }}
+      -
+        name: GolangCI-Lint
+        if: steps.review.outputs.golangci == 'true'
+        uses: reviewdog/action-golangci-lint@v2
+        with:
+          level: warning
+          reporter: github-pr-review
+          go_version_file: go.mod
+          github_token: ${{ github.token }}
