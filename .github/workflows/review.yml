@@ -289,14 +289,14 @@ jobs:
           reporter: github-pr-review
           hadolint_ignore: ${{ steps.review.outputs.hadolint_exclusions }}
           github_token: ${{ github.token }}
-      -
-        name: YamlLint
-        if: steps.review.outputs.yamllint == 'true'
-        uses: reviewdog/action-yamllint@v1
-        with:
-          level: warning
-          reporter: github-pr-review
-          github_token: ${{ github.token }}
+      #-
+      #  name: YamlLint
+      #  if: steps.review.outputs.yamllint == 'true'
+      #  uses: reviewdog/action-yamllint@v1
+      #  with:
+      #    level: warning
+      #    reporter: github-pr-review
+      #    github_token: ${{ github.token }}
       #-
         #name: ActionLint
         #if: steps.review.outputs.actionlint == 'true'
