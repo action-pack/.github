@@ -358,7 +358,7 @@ jobs:
           reporter: github-pr-review
           stylelint_input: "**/*.{css,scss,sass,less}"
           github_token: ${{ github.token }}
-      #-
+        #-
         #name: Markdownlint
         #if: steps.review.outputs.markdownlint == 'true'
         #uses: reviewdog/action-markdownlint@v0
