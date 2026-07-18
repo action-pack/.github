@@ -140,6 +140,21 @@ jobs:
           [[ "$shell_sources" == true ]] || shellcheck=false
         fi
 
+        # YAMLlint configuration
+
+        cat > .git/yamllint-review.yml <<'EOF'
+        extends: default
+
+        rules:
+          braces: disable
+          brackets: disable
+          comments: disable
+          comments-indentation: disable
+          document-start: disable
+          line-length: disable
+          truthy: disable
+        EOF
+
         # ESLint and Stylelint require both a project configuration and
         # the corresponding package to be declared in package.json.
         read -r eslint_available stylelint_available < <(
@@ -296,6 +311,7 @@ jobs:
       #  with:
       #    level: warning
       #    reporter: github-pr-review
+      #    yamllint_flags: "-c .git/yamllint-review.yml ."
       #    github_token: ${{ github.token }}
       #-
         #name: ActionLint
