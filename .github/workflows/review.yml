@@ -27,6 +27,8 @@ jobs:
 
         hadolint=false
         yamllint=false
+        jsonyaml=false
+        xml=false
         actionlint=false
         shellcheck=false
         eslint=false
@@ -53,6 +55,18 @@ jobs:
             *.yml|*.yaml|\
             .yamllint|.yamllint.yml|.yamllint.yaml)
               yamllint=true
+              ;;
+          esac
+
+          case "$file" in
+            *.json|*.yml|*.yaml)
+              jsonyaml=true
+              ;;
+          esac
+
+          case "$file" in
+            *.xml)
+              xml=true
               ;;
           esac
 
@@ -270,6 +284,8 @@ jobs:
         {
           printf 'hadolint=%s\n' "$hadolint"
           printf 'yamllint=%s\n' "$yamllint"
+          printf 'jsonyaml=%s\n' "$jsonyaml"
+          printf 'xml=%s\n' "$xml"
           printf 'actionlint=%s\n' "$actionlint"
           printf 'shellcheck=%s\n' "$shellcheck"
           printf 'eslint=%s\n' "$eslint"
@@ -313,6 +329,17 @@ jobs:
       #    reporter: github-pr-review
       #    yamllint_flags: "-c .git/yamllint-review.yml ."
       #    github_token: ${{ github.token }}
+      -
+        name: Validate JSON and YAML
+        if: steps.review.outputs.jsonyaml == 'true'
+        uses: GrantBirki/json-yaml-validate@v5
+      -
+        name: Validate XML
+        if: steps.review.outputs.xml == 'true'
+        uses: action-pack/valid-xml@v1
+        with:
+          path: "."
+          file-endings: ".xml"
       #-
         #name: ActionLint
         #if: steps.review.outputs.actionlint == 'true'
