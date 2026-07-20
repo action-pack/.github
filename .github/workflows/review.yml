@@ -364,6 +364,7 @@ jobs:
           check_all_files_with_shebangs: "true"
           shellcheck_flags: >-
             -x
+            -P SCRIPTDIR
             ${{ steps.review.outputs.shellcheck_exclusions }}
           github_token: ${{ github.token }}
       -
