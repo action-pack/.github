@@ -35,6 +35,7 @@ jobs:
         stylelint=false
         markdownlint=false
         golangci=false
+        staticcheck=false
 
         mapfile -t changed_files < <(
           gh api --paginate \
@@ -117,10 +118,15 @@ jobs:
           esac
 
           case "$file" in
-            *.go|go.mod|go.sum|\
+            *.go|\
+            go.mod|*/go.mod|\
+            go.sum|*/go.sum|\
             .golangci.yml|.golangci.yaml|\
-            .golangci-lint.yml|.golangci-lint.yaml)
+            */.golangci.yml|*/.golangci.yaml|\
+            .golangci-lint.yml|.golangci-lint.yaml|\
+            */.golangci-lint.yml|*/.golangci-lint.yaml)
               golangci=true
+              staticcheck=true
               ;;
           esac
         done
@@ -235,10 +241,26 @@ jobs:
           markdownlint=false
         fi
 
-        if [[ "$golangci" == true ]]; then
-          if [[ ! -f go.mod ]] ||
+        # Use the first tracked Go module as the Go review root.
+        go_mod=""
+        go_workdir=""
+
+        if [[ "$golangci" == true || "$staticcheck" == true ]]; then
+          while IFS= read -r file; do
+            case "$file" in
+              go.mod|*/go.mod)
+                go_mod="$file"
+                break
+                ;;
+            esac
+          done <<< "$tracked_files"
+
+          if [[ -z "$go_mod" ]] ||
             ! grep -Eq '\.go$' <<< "$tracked_files"; then
             golangci=false
+            staticcheck=false
+          else
+            go_workdir=$(dirname "$go_mod")
           fi
         fi
 
@@ -403,10 +425,20 @@ jobs:
           printf 'stylelint=%s\n' "$stylelint"
           printf 'markdownlint=%s\n' "$markdownlint"
           printf 'golangci=%s\n' "$golangci"
+          printf 'staticcheck=%s\n' "$staticcheck"
+          printf 'go_mod=%s\n' "$go_mod"
+          printf 'go_workdir=%s\n' "$go_workdir"
           printf 'node=%s\n' "$node"
           printf 'shellcheck_exclusions=%s\n' "$shellcheck_exclusions"
           printf 'hadolint_exclusions=%s\n' "$hadolint_exclusions"
         } >> "$GITHUB_OUTPUT"
+    -
+      name: Set up Go
+      if: steps.review.outputs.go_mod != ''
+      uses: actions/setup-go@v7
+      with:
+        cache: false
+        go-version-file: ${{ steps.review.outputs.go_mod }}
     -
       # Install dependencies once so ESLint and Stylelint do not run
       # concurrent npm install commands inside the parallel block.
@@ -507,11 +539,20 @@ jobs:
         #  reporter: github-pr-review
         #  github_token: ${{ github.token }}
       -
+        name: Staticcheck
+        if: steps.review.outputs.staticcheck == 'true'
+        uses: dominikh/staticcheck-action@v1
+        with:
+          version: latest
+          install-go: false
+          working-directory: ${{ steps.review.outputs.go_workdir }}
+      -
         name: GolangCI-Lint
         if: steps.review.outputs.golangci == 'true'
         uses: reviewdog/action-golangci-lint@v2
         with:
           level: warning
           reporter: github-pr-review
-          go_version_file: go.mod
+          workdir: ${{ steps.review.outputs.go_workdir }}
+          go_version_file: ${{ steps.review.outputs.go_mod }}
           github_token: ${{ github.token }}
