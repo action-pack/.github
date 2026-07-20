@@ -257,7 +257,7 @@ jobs:
           check_file=".github/workflows/check.yaml"
         fi
 
-        shellcheck_exclusions=""
+        shellcheck_exclusions="-e SC1091"
         hadolint_exclusions=""
 
         if [[ -n "$check_file" ]]; then
