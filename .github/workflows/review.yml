@@ -281,7 +281,9 @@ jobs:
             shellcheck_exclusions+=" ${exclusions[0]}"
           fi
 
-          hadolint_exclusions="${exclusions[1]:-}"
+          if [[ -n "${exclusions[1]:-}" ]]; then
+            hadolint_exclusions+=" ${exclusions[1]}"
+          fi
         fi
 
         {
