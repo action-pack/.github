@@ -468,6 +468,7 @@ jobs:
           fail_level: warning
           reporter: github-pr-check
           filter_mode: nofilter
+          reviewdog_flags: -tee
           pattern: |
             *.sh
             *.bash
