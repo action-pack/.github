@@ -465,7 +465,7 @@ jobs:
         uses: reviewdog/action-shellcheck@v1
         with:
           level: warning
-          fail_level: error
+          fail_level: warning
           reporter: github-pr-check
           filter_mode: nofilter
           pattern: |
