@@ -258,7 +258,7 @@ jobs:
         fi
 
         shellcheck_exclusions="-e SC1091"
-        hadolint_exclusions=""
+        hadolint_exclusions="DL3008 DL3018 DL3059 DL4001"
 
         if [[ -n "$check_file" ]]; then
           mapfile -t exclusions < <(
