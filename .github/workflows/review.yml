@@ -293,7 +293,7 @@ jobs:
         lines = text.splitlines()
 
         shellcheck = ["SC1091", "SC2034", "SC2153", "SC2317"]
-        hadolint = ["DL3006", "DL3008", "DL3018", "DL3020", "DL3059", "DL4001", "DL4006"]
+        hadolint = ["DL3006", "DL3008", "DL3018", "DL3020", "DL3059", "DL3062", "DL4001", "DL4006"]
 
         def indentation(line):
             return len(line) - len(line.lstrip())
