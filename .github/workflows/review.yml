@@ -466,7 +466,8 @@ jobs:
         with:
           level: warning
           fail_level: error
-          reporter: github-pr-review
+          reporter: github-pr-check
+          filter_mode: nofilter
           pattern: |
             *.sh
             *.bash
