@@ -247,8 +247,7 @@ jobs:
           node=true
         fi
 
-        # Import repository-specific exclusions from the existing
-        # check workflow when one is present.
+        # Import action-specific exclusions from the existing check workflow.
         check_file=""
 
         if [[ -f .github/workflows/check.yml ]]; then
@@ -257,34 +256,141 @@ jobs:
           check_file=".github/workflows/check.yaml"
         fi
 
-        shellcheck_exclusions="-e SC1091"
-        hadolint_exclusions="DL3008 DL3018 DL3059 DL4001"
-
-        if [[ -n "$check_file" ]]; then
-          mapfile -t exclusions < <(
-            CHECK_FILE="$check_file" python3 <<'PY'
+        mapfile -t exclusions < <(
+          CHECK_FILE="$check_file" python3 <<'PY'
         import os
         import re
         from pathlib import Path
 
-        text = Path(os.environ["CHECK_FILE"]).read_text(encoding="utf-8")
+        check_file = os.environ["CHECK_FILE"]
+        text = (
+            Path(check_file).read_text(encoding="utf-8")
+            if check_file
+            else ""
+        )
+        lines = text.splitlines()
 
-        shellcheck = list(dict.fromkeys(re.findall(r"\bSC\d{4}\b", text)))
-        hadolint = list(dict.fromkeys(re.findall(r"\bDL\d{4}\b", text)))
+        shellcheck = ["SC1091"]
+        hadolint = ["DL3008", "DL3018", "DL3059", "DL4001"]
+
+        def indentation(line):
+            return len(line) - len(line.lstrip())
+
+        def scalar(index, key_indent, value):
+            value = value.strip()
+
+            if value not in {"|", "|-", "|+", ">", ">-", ">+"}:
+                return value
+
+            content = []
+
+            for line in lines[index + 1:]:
+                if not line.strip():
+                    content.append("")
+                    continue
+
+                if indentation(line) <= key_indent:
+                    break
+
+                content.append(line.strip())
+
+            return " ".join(content)
+
+        def step_bounds(uses_index):
+            uses_indent = indentation(lines[uses_index])
+            step_indent = None
+            start = 0
+
+            for index in range(uses_index - 1, -1, -1):
+                match = re.match(r"^(\s*)-\s*.*$", lines[index])
+
+                if match and len(match.group(1)) < uses_indent:
+                    step_indent = len(match.group(1))
+                    start = index
+                    break
+
+            if step_indent is None:
+                return start, len(lines)
+
+            for index in range(uses_index + 1, len(lines)):
+                line = lines[index]
+
+                if not line.strip():
+                    continue
+
+                current_indent = indentation(line)
+
+                if current_indent < step_indent:
+                    return start, index
+
+                if (
+                    current_indent == step_indent
+                    and re.match(r"^\s*-\s*", line)
+                ):
+                    return start, index
+
+            return start, len(lines)
+
+        def add_codes(target, values, pattern):
+            for value in values:
+                for code in re.findall(pattern, value):
+                    if code not in target:
+                        target.append(code)
+
+        # Only import SC codes from the standalone ShellCheck configuration.
+        shellcheck_values = []
+
+        for index, line in enumerate(lines):
+            match = re.match(
+                r"^(\s*)(?:SHELLCHECK_OPTS|shellcheck_flags):\s*(.*)$",
+                line,
+            )
+
+            if match:
+                shellcheck_values.append(
+                    scalar(index, len(match.group(1)), match.group(2))
+                )
+
+        add_codes(shellcheck, shellcheck_values, r"\bSC\d{4}\b")
+
+        # Import both DL and SC codes from Hadolint action inputs. Hadolint
+        # reports SC diagnostics for shell code inside Dockerfile RUN commands.
+        hadolint_values = []
+
+        for index, line in enumerate(lines):
+            if not re.match(
+                r"^\s*uses:\s*['\"]?"
+                r"(?:hadolint/hadolint-action|reviewdog/action-hadolint)@",
+                line,
+            ):
+                continue
+
+            _, end = step_bounds(index)
+
+            for input_index in range(index + 1, end):
+                match = re.match(
+                    r"^(\s*)(?:ignore|hadolint_ignore):\s*(.*)$",
+                    lines[input_index],
+                )
+
+                if match:
+                    hadolint_values.append(
+                        scalar(
+                            input_index,
+                            len(match.group(1)),
+                            match.group(2),
+                        )
+                    )
+
+        add_codes(hadolint, hadolint_values, r"\b(?:DL|SC)\d{4}\b")
 
         print(" ".join(f"-e {code}" for code in shellcheck))
         print(" ".join(hadolint))
         PY
-          )
+        )
 
-          if [[ -n "${exclusions[0]:-}" ]]; then
-            shellcheck_exclusions+=" ${exclusions[0]}"
-          fi
-
-          if [[ -n "${exclusions[1]:-}" ]]; then
-            hadolint_exclusions+=" ${exclusions[1]}"
-          fi
-        fi
+        shellcheck_exclusions="${exclusions[0]}"
+        hadolint_exclusions="${exclusions[1]}"
 
         {
           printf 'hadolint=%s\n' "$hadolint"
