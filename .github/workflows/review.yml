@@ -277,7 +277,10 @@ jobs:
         PY
           )
 
-          shellcheck_exclusions="${exclusions[0]:-}"
+          if [[ -n "${exclusions[0]:-}" ]]; then
+            shellcheck_exclusions+=" ${exclusions[0]}"
+          fi
+
           hadolint_exclusions="${exclusions[1]:-}"
         fi
 
