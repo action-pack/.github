@@ -162,7 +162,7 @@ jobs:
 
         # YAMLlint configuration
 
-        cat > .git/yamllint-review.yml <<'EOF'
+        cat > .git/yamllint-review.yml <<'YAML_EOF'
         extends: default
 
         rules:
@@ -173,7 +173,7 @@ jobs:
           document-start: disable
           line-length: disable
           truthy: disable
-        EOF
+        YAML_EOF
 
         # ESLint and Stylelint require both a project configuration and
         # the corresponding package to be declared in package.json.
@@ -438,7 +438,7 @@ jobs:
       uses: actions/setup-go@v7
       with:
         cache: false
-        go-version-file: ${{ steps.review.outputs.go_mod }}
+        go-version-file: ${{ github.workspace }}/${{ steps.review.outputs.go_mod }}
     -
       # Install dependencies once so ESLint and Stylelint do not run
       # concurrent npm install commands inside the parallel block.
@@ -545,7 +545,7 @@ jobs:
         with:
           version: latest
           install-go: false
-          working-directory: ${{ steps.review.outputs.go_workdir }}
+          working-directory: ${{ github.workspace }}/${{ steps.review.outputs.go_workdir }}
       -
         name: GolangCI-Lint
         if: steps.review.outputs.golangci == 'true'
@@ -553,6 +553,6 @@ jobs:
         with:
           level: warning
           reporter: github-pr-review
-          workdir: ${{ steps.review.outputs.go_workdir }}
-          go_version_file: ${{ steps.review.outputs.go_mod }}
+          workdir: ${{ github.workspace }}/${{ steps.review.outputs.go_workdir }}
+          go_version_file: ${{ github.workspace }}/${{ steps.review.outputs.go_mod }}
           github_token: ${{ github.token }}
