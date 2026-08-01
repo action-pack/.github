@@ -457,6 +457,8 @@ jobs:
         name: Hadolint
         if: steps.review.outputs.hadolint == 'true'
         uses: reviewdog/action-hadolint@v1
+        env:
+          GIT_CONFIG_GLOBAL: /tmp/review-gitconfig-hadolint
         with:
           level: warning
           fail_level: error
@@ -467,6 +469,8 @@ jobs:
         name: YamlLint
         if: steps.review.outputs.yamllint == 'true'
         uses: reviewdog/action-yamllint@v1
+        env:
+          GIT_CONFIG_GLOBAL: /tmp/review-gitconfig-yamllint
         with:
           level: warning
           reporter: github-pr-review
@@ -476,10 +480,14 @@ jobs:
         name: Validate JSON and YAML
         if: steps.review.outputs.jsonyaml == 'true'
         uses: GrantBirki/json-yaml-validate@v5
+        env:
+          GIT_CONFIG_GLOBAL: /tmp/review-gitconfig-json-yaml
       -
         name: Validate XML
         if: steps.review.outputs.xml == 'true'
         uses: action-pack/valid-xml@v1
+        env:
+          GIT_CONFIG_GLOBAL: /tmp/review-gitconfig-xml
         with:
           path: "."
           file-endings: ".xml"
@@ -487,6 +495,8 @@ jobs:
         name: ActionLint
         if: steps.review.outputs.actionlint == 'true'
         uses: reviewdog/action-actionlint@v1
+        env:
+          GIT_CONFIG_GLOBAL: /tmp/review-gitconfig-actionlint
         with:
           level: warning
           reporter: github-pr-review
@@ -495,6 +505,8 @@ jobs:
         name: Shellcheck
         if: steps.review.outputs.shellcheck == 'true'
         uses: reviewdog/action-shellcheck@v1
+        env:
+          GIT_CONFIG_GLOBAL: /tmp/review-gitconfig-shellcheck
         with:
           level: warning
           fail_level: warning
@@ -515,6 +527,8 @@ jobs:
         name: ESLint
         if: steps.review.outputs.eslint == 'true'
         uses: reviewdog/action-eslint@v1
+        env:
+          GIT_CONFIG_GLOBAL: /tmp/review-gitconfig-eslint
         with:
           level: warning
           fail_level: error
@@ -524,6 +538,8 @@ jobs:
         name: Stylelint
         if: steps.review.outputs.stylelint == 'true'
         uses: reviewdog/action-stylelint@v1
+        env:
+          GIT_CONFIG_GLOBAL: /tmp/review-gitconfig-stylelint
         with:
           level: warning
           fail_level: error
@@ -534,6 +550,8 @@ jobs:
         #name: Markdownlint
         #if: steps.review.outputs.markdownlint == 'true'
         #uses: reviewdog/action-markdownlint@v0
+        #env:
+        #  GIT_CONFIG_GLOBAL: /tmp/review-gitconfig-markdownlint
         #with:
         #  level: warning
         #  reporter: github-pr-review
@@ -542,6 +560,8 @@ jobs:
         name: Staticcheck
         if: steps.review.outputs.staticcheck == 'true'
         uses: dominikh/staticcheck-action@v1
+        env:
+          GIT_CONFIG_GLOBAL: /tmp/review-gitconfig-staticcheck
         with:
           version: latest
           install-go: false
@@ -552,6 +572,7 @@ jobs:
         working-directory: ${{ steps.review.outputs.go_workdir }}
         shell: bash
         env:
+          GIT_CONFIG_GLOBAL: /tmp/review-gitconfig-golangci
           GOBIN: ${{ runner.temp }}/golangci-bin
           GOMODCACHE: ${{ runner.temp }}/golangci-modcache
           GOCACHE: ${{ runner.temp }}/golangci-buildcache
