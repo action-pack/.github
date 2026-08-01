@@ -463,15 +463,15 @@ jobs:
           reporter: github-pr-review
           hadolint_ignore: ${{ steps.review.outputs.hadolint_exclusions }}
           github_token: ${{ github.token }}
-      #-
-      #  name: YamlLint
-      #  if: steps.review.outputs.yamllint == 'true'
-      #  uses: reviewdog/action-yamllint@v1
-      #  with:
-      #    level: warning
-      #    reporter: github-pr-review
-      #    yamllint_flags: "-c .git/yamllint-review.yml ."
-      #    github_token: ${{ github.token }}
+      -
+        name: YamlLint
+        if: steps.review.outputs.yamllint == 'true'
+        uses: reviewdog/action-yamllint@v1
+        with:
+          level: warning
+          reporter: github-pr-review
+          yamllint_flags: "-c .git/yamllint-review.yml ."
+          github_token: ${{ github.token }}
       -
         name: Validate JSON and YAML
         if: steps.review.outputs.jsonyaml == 'true'
@@ -483,14 +483,14 @@ jobs:
         with:
           path: "."
           file-endings: ".xml"
-      #-
-        #name: ActionLint
-        #if: steps.review.outputs.actionlint == 'true'
-        #uses: reviewdog/action-actionlint@v1
-        #with:
-        #  level: warning
-        #  reporter: github-pr-review
-        #  github_token: ${{ github.token }}
+      -
+        name: ActionLint
+        if: steps.review.outputs.actionlint == 'true'
+        uses: reviewdog/action-actionlint@v1
+        with:
+          level: warning
+          reporter: github-pr-review
+          github_token: ${{ github.token }}
       -
         name: Shellcheck
         if: steps.review.outputs.shellcheck == 'true'
@@ -547,12 +547,42 @@ jobs:
           install-go: false
           working-directory: ${{ github.workspace }}/${{ steps.review.outputs.go_workdir }}
       -
+        name: Install GolangCI-Lint and Reviewdog
+        if: steps.review.outputs.golangci == 'true'
+        env:
+          GOBIN: ${{ runner.temp }}/go-review-bin
+        run: |
+          set -Eeuo pipefail
+
+          mkdir -p "$GOBIN"
+
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
+          go install github.com/reviewdog/reviewdog/cmd/reviewdog@latest
+
+          echo "$GOBIN" >> "$GITHUB_PATH"
+
+      -
         name: GolangCI-Lint
         if: steps.review.outputs.golangci == 'true'
-        uses: reviewdog/action-golangci-lint@v2
-        with:
-          level: warning
-          reporter: github-pr-review
-          workdir: ${{ github.workspace }}/${{ steps.review.outputs.go_workdir }}
-          go_version_file: ${{ github.workspace }}/${{ steps.review.outputs.go_mod }}
-          github_token: ${{ github.token }}
+        working-directory: ${{ steps.review.outputs.go_workdir }}
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+
+          echo "Working directory: $PWD"
+          echo "Go module: $(go env GOMOD)"
+
+          go mod download
+          go list ./...
+
+          golangci-lint run \
+            --output.text.path stdout \
+            ./... |
+            reviewdog \
+              -f=golangci-lint \
+              -name=golangci \
+              -reporter=github-pr-review \
+              -filter-mode=added \
+              -fail-level=none \
+              -level=warning
