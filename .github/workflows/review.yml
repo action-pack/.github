@@ -547,28 +547,22 @@ jobs:
           install-go: false
           working-directory: ${{ github.workspace }}/${{ steps.review.outputs.go_workdir }}
       -
-        name: Install GolangCI-Lint and Reviewdog
-        if: steps.review.outputs.golangci == 'true'
-        env:
-          GOBIN: ${{ runner.temp }}/go-review-bin
-        run: |
-          set -Eeuo pipefail
-
-          mkdir -p "$GOBIN"
-
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
-          go install github.com/reviewdog/reviewdog/cmd/reviewdog@latest
-
-          echo "$GOBIN" >> "$GITHUB_PATH"
-
-      -
         name: GolangCI-Lint
         if: steps.review.outputs.golangci == 'true'
         working-directory: ${{ steps.review.outputs.go_workdir }}
+        shell: bash
         env:
+          GOBIN: ${{ runner.temp }}/golangci-bin
+          GOMODCACHE: ${{ runner.temp }}/golangci-modcache
+          GOCACHE: ${{ runner.temp }}/golangci-buildcache
           REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
+
+          mkdir -p "$GOBIN" "$GOMODCACHE" "$GOCACHE"
+
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
+          go install github.com/reviewdog/reviewdog/cmd/reviewdog@latest
 
           echo "Working directory: $PWD"
           echo "Go module: $(go env GOMOD)"
@@ -576,10 +570,10 @@ jobs:
           go mod download
           go list ./...
 
-          golangci-lint run \
+          "$GOBIN/golangci-lint" run \
             --output.text.path stdout \
             ./... |
-            reviewdog \
+            "$GOBIN/reviewdog" \
               -f=golangci-lint \
               -name=golangci \
               -reporter=github-pr-review \
