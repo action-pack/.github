@@ -591,9 +591,13 @@ jobs:
           go mod download
           go list ./...
 
+          # Keep all diagnostics visible in the job log before reviewdog
+          # filters PR annotations to added lines.
           "$GOBIN/golangci-lint" run \
+            --issues-exit-code=0 \
             --output.text.path stdout \
             ./... |
+            tee /dev/stderr |
             "$GOBIN/reviewdog" \
               -f=golangci-lint \
               -name=golangci \
