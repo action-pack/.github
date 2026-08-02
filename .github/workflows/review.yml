@@ -591,17 +591,42 @@ jobs:
           go mod download
           go list ./...
 
-          # Keep all diagnostics visible in the job log before reviewdog
-          # filters PR annotations to added lines.
+          output="$(mktemp)"
+          trap 'rm -f "$output"' EXIT
+
+          set +e
           "$GOBIN/golangci-lint" run \
             --issues-exit-code=0 \
             --output.text.path stdout \
-            ./... |
-            tee /dev/stderr |
-            "$GOBIN/reviewdog" \
-              -f=golangci-lint \
-              -name=golangci \
-              -reporter=github-pr-review \
-              -filter-mode=added \
-              -fail-level=none \
-              -level=warning
+            --output.text.colors=false \
+            --output.text.print-issued-lines=false \
+            ./... >"$output" 2>&1
+          lint_status=$?
+          set -e
+
+          if [[ -s "$output" ]]; then
+            cat "$output"
+          else
+            echo "GolangCI-Lint produced no output."
+          fi
+
+          if (( lint_status != 0 )); then
+            echo "::error::GolangCI-Lint failed with exit code ${lint_status}."
+            exit "$lint_status"
+          fi
+
+          set +e
+          "$GOBIN/reviewdog" \
+            -f=golangci-lint \
+            -name=golangci \
+            -reporter=github-pr-review \
+            -filter-mode=file \
+            -fail-level=none \
+            -level=warning <"$output"
+          reviewdog_status=$?
+          set -e
+
+          if (( reviewdog_status != 0 )); then
+            echo "::error::Reviewdog failed with exit code ${reviewdog_status}."
+            exit "$reviewdog_status"
+          fi
